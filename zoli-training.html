@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zoli · Edzéselemző</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #0f0f1a;
+    --bg3: #13131f;
+    --border: #1e1e2e;
+    --border2: #2a2a3e;
+    --text: #e8e4d9;
+    --muted: #5a5a7a;
+    --dim: #3a3a4a;
+    --green: #4ade80;
+    --yellow: #facc15;
+    --orange: #fb923c;
+    --red: #f87171;
+    --purple: #c084fc;
+    --blue: #60a5fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', 'Courier New', monospace;
+    min-height: 100vh;
+  }
+  header {
+    background: #0d0d17;
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .logo-tag { font-size: 10px; letter-spacing: 4px; color: var(--green); text-transform: uppercase; }
+  .logo-title { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo-meta { font-size: 10px; color: var(--dim); margin-left: auto; letter-spacing: 1px; }
+
+  main { max-width: 780px; margin: 0 auto; padding: 40px 24px; }
+
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+  .panel-label {
+    font-size: 10px; letter-spacing: 3px; color: var(--green);
+    text-transform: uppercase; margin-bottom: 20px;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2px dashed var(--border2);
+    border-radius: 4px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--green);
+    background: #4ade8008;
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 32px; margin-bottom: 12px; }
+  .drop-title { font-size: 14px; color: var(--text); margin-bottom: 6px; letter-spacing: 0.5px; }
+  .drop-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.5px; }
+  .drop-hint { font-size: 10px; color: var(--dim); margin-top: 16px; letter-spacing: 0.5px; }
+
+  /* Feel slider */
+  .slider-row { margin-top: 20px; }
+  .slider-label { font-size: 10px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; }
+  input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
+  .slider-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); margin-top: 4px; }
+
+  /* Button */
+  .btn {
+    background: var(--green); color: var(--bg);
+    border: none; border-radius: 3px;
+    padding: 13px 28px;
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    font-family: inherit; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+    margin-top: 20px;
+  }
+  .btn:hover { background: #86efac; }
+  .btn:disabled { background: var(--dim); cursor: not-allowed; color: var(--muted); }
+
+  /* Parsed data preview */
+  .data-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-top: 16px;
+  }
+  .data-cell {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    padding: 12px 14px;
+  }
+  .data-cell-label { font-size: 9px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .data-cell-val { font-size: 18px; color: var(--text); letter-spacing: 0.5px; }
+
+  /* Result */
+  .result { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  .zone-badge {
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 22px;
+    background: var(--bg2);
+    border-radius: 4px;
+    margin-bottom: 20px;
+  }
+  .zone-circle {
+    width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    flex-shrink: 0;
+  }
+  .zone-name { font-size: 13px; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+  .zone-meta { font-size: 11px; color: var(--muted); }
+  .zone-adj { font-size: 11px; color: var(--yellow); margin-top: 4px; }
+
+  .zone-bar { margin-bottom: 28px; }
+  .zone-bar-label { font-size: 9px; letter-spacing: 2px; color: var(--dim); margin-bottom: 8px; text-transform: uppercase; }
+  .zone-bar-track { display: flex; height: 6px; border-radius: 3px; overflow: hidden; gap: 2px; }
+  .zone-bar-seg { flex: 1; transition: all 0.3s; }
+  .zone-bar-ends { display: flex; justify-content: space-between; font-size: 9px; color: var(--dim); margin-top: 4px; letter-spacing: 1px; }
+
+  .workout-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 22px;
+    margin-bottom: 14px;
+  }
+  .workout-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .workout-day { font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
+  .workout-tag {
+    font-size: 11px; border-radius: 2px; padding: 3px 10px; letter-spacing: 1px;
+  }
+  .workout-desc { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
+  .workout-detail {
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: 3px; padding: 12px 14px;
+    font-size: 13px; line-height: 1.8; letter-spacing: 0.3px;
+  }
+
+  .reminder {
+    padding: 14px 18px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 3px; font-size: 11px; color: var(--dim); line-height: 1.8;
+  }
+
+  .error-msg { color: var(--red); font-size: 12px; margin-top: 12px; letter-spacing: 0.5px; }
+  .loading { color: var(--muted); font-size: 12px; margin-top: 12px; letter-spacing: 1px; }
+
+  /* Laps table */
+  .laps-toggle { font-size: 10px; letter-spacing: 2px; color: var(--blue); cursor: pointer; text-transform: uppercase; margin-top: 16px; display: inline-block; }
+  .laps-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
+  .laps-table th { font-size: 9px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .laps-table td { padding: 7px 10px; border-bottom: 1px solid var(--border2); color: var(--text); }
+  .laps-table tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo-tag">ZOLI</span>
+  <span class="logo-title">Edzéselemző</span>
+  <span class="logo-meta">LT1 · 151bpm · 5:20/km &nbsp;|&nbsp; LT2 · 166bpm · 4:24/km</span>
+</header>
+
+<main>
+  <!-- Upload panel -->
+  <div class="panel">
+    <div class="panel-label">Garmin export feltöltése</div>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".zip,.fit">
+      <div class="drop-icon">📁</div>
+      <div class="drop-title">Húzd ide a Garmin ZIP vagy FIT fájlt</div>
+      <div class="drop-sub">vagy kattints a tallózáshoz</div>
+      <div class="drop-hint">Garmin Connect → Tevékenység → ⚙️ → Export Original (.zip vagy .fit)</div>
+    </div>
+
+    <div id="parsedPreview" style="display:none">
+      <div class="data-grid" id="dataGrid"></div>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>Szubjektív érzés</span>
+          <span id="feelText">Közepes 😐</span>
+        </div>
+        <input type="range" min="1" max="5" value="3" id="feelSlider">
+        <div class="slider-ends"><span>Nagyon nehéz</span><span>Könnyű</span></div>
+      </div>
+      <button class="btn" id="analyzeBtn">Elemzés →</button>
+    </div>
+
+    <div id="errorMsg" class="error-msg"></div>
+    <div id="loadingMsg" class="loading"></div>
+  </div>
+
+  <!-- Result panel -->
+  <div id="resultPanel" style="display:none" class="result">
+
+    <div class="zone-badge" id="zoneBadge"></div>
+
+    <div class="zone-bar">
+      <div class="zone-bar-label">Intenzitás zóna</div>
+      <div class="zone-bar-track" id="zoneBarTrack"></div>
+      <div class="zone-bar-ends">
+        <span>Z1</span><span>Z2</span><span>T</span><span>I</span><span>MAX</span>
+      </div>
+    </div>
+
+    <div class="workout-card" id="thursdayCard"></div>
+    <div class="workout-card" id="saturdayCard"></div>
+
+    <div class="reminder">
+      <span style="color:var(--green)">T-iram emlékeztető:</span>
+      4:35–4:45/km · max 162 bpm · A blokk végén azt érzed: még futhatnál 10 percet, de 20-at már nem.
+    </div>
+
+    <!-- Laps -->
+    <span class="laps-toggle" id="lapsToggle" style="display:none">▶ Résztávok megjelenítése</span>
+    <div id="lapsContainer" style="display:none"></div>
+  </div>
+</main>
+
+<script>
+// ── Zónahatárok (laktátteszt alapján) ───────────────────────────────────────
+const ZONES = {
+  Z1:  { maxHR: 140, maxPaceSec: 375, label: "Z1 Regeneráló",  color: "#4ade80" },
+  Z2:  { maxHR: 150, maxPaceSec: 330, label: "Z2 Aerob alap",  color: "#a3e635" },
+  T:   { maxHR: 162, maxPaceSec: 285, label: "T Küszöb",       color: "#facc15" },
+  I:   { maxHR: 169, maxPaceSec: 255, label: "I Interval",     color: "#fb923c" },
+  MAX: { maxHR: 200, maxPaceSec: 0,   label: "MAX Anaerob",    color: "#f87171" },
+};
+const ZONE_ORDER = ["Z1","Z2","T","I","MAX"];
+
+const THURSDAY = {
+  Z1:  { label:"Z2 könnyű",          color:"#4ade80", desc:"A kedd nagyon kemény volt. Csütörtök legyen valóban könnyű.", workout:"35–40 perc · max 148 bpm · 4× repülő a végén" },
+  Z2:  { label:"T-edzés — normál",   color:"#facc15", desc:"A kedd jól sikerült, a test készen áll a küszöbmunkára.", workout:"2 km bem. · 2×12 perc T @ 4:35–4:45/km (2 perc pihi) · 1-2 km lev." },
+  T:   { label:"T-edzés — teljes",   color:"#fb923c", desc:"A kedd kontrollált volt. Csütörtök mehet a teljes T-terv szerint.", workout:"2 km bem. · 20 perc folyamatos T @ 4:35–4:45/km · 1-2 km lev." },
+  I:   { label:"T-edzés — rövidített",color:"#f87171",desc:"A kedd az I-zóna határán volt. Csütörtök óvatosabban.", workout:"2 km bem. · 2×8 perc T @ 4:40–4:50/km (90 mp pihi) · 1 km lev." },
+  MAX: { label:"Pihenő",             color:"#c084fc", desc:"A kedd túl kemény volt. A test regenerációt igényel.", workout:"Pihenő — legfeljebb 20 perc séta vagy nagyon lassú Z1." },
+};
+const SATURDAY = {
+  Z1:  { workout:"16–18 km · max 150 bpm · Z2 végig, utolsó 2 km Z3 eleje · 4× repülő", note:"A kedd könnyű volt, szombat lehet a hét csúcsa." },
+  Z2:  { workout:"14–15 km · max 150 bpm · 4× repülő a végén", note:"Normál hosszú futás a tervnek megfelelően." },
+  T:   { workout:"12–13 km · max 148 bpm · 4× repülő a végén", note:"A T-munka csütörtökön megvolt — szombat ne legyen hosszabb a kelleténél." },
+  I:   { workout:"10–11 km · max 145 bpm · 2× repülő", note:"Kedd intenzív volt — szombat rövidebb, óvatosabb." },
+  MAX: { workout:"8–10 km · max 140 bpm · semmi repülő", note:"Pihenő hét — szombat csak lábak mozgatása." },
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmtPace(secPerKm) {
+  if (!secPerKm || secPerKm <= 0) return "–";
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}:${s.toString().padStart(2,"0")}/km`;
+}
+function fmtTime(sec) {
+  const m = Math.floor(sec/60), s = Math.round(sec%60);
+  return `${m}:${s.toString().padStart(2,"0")}`;
+}
+function classifyZone(avgHR, avgPaceSec) {
+  if (avgHR <= 140 && avgPaceSec >= 330) return "Z1";
+  if (avgHR <= 150 && avgPaceSec >= 285) return "Z2";
+  if (avgHR <= 162) return "T";
+  if (avgHR <= 169) return "I";
+  return "MAX";
+}
+function adjustByFeel(zone, feel) {
+  const i = ZONE_ORDER.indexOf(zone);
+  if (feel <= 1) return ZONE_ORDER[Math.min(i+1, 4)];
+  if (feel >= 5) return ZONE_ORDER[Math.max(i-1, 0)];
+  return zone;
+}
+
+// ── FIT binary parser ────────────────────────────────────────────────────────
+// Lightweight: extracts session summary (avg_hr, avg_speed, total_distance, total_elapsed_time)
+// and lap data from a Garmin FIT file ArrayBuffer
+function parseFIT(buffer) {
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+
+  // FIT header
+  const headerSize = view.getUint8(0);
+  if (headerSize < 12) throw new Error("Nem FIT fájl");
+  const magic = String.fromCharCode(bytes[8],bytes[9],bytes[10],bytes[11]);
+  if (magic !== ".FIT") throw new Error("Nem érvényes FIT fájl");
+
+  const localMsgDefs = {};
+  const sessions = [];
+  const laps = [];
+  let pos = headerSize;
+  const dataEnd = buffer.byteLength - 2; // skip CRC
+
+  const FIELD_TYPES = {
+    0: 1, 1: 1, 2: 1, 3: 2, 4: 2, 5: 4, 6: 4, 7: 1, // various
+    132: 2, 134: 4, 136: 1, 137: 2, 140: 4
+  };
+
+  function readBaseType(pos, baseType, size) {
+    switch(baseType & 0x9F) {
+      case 0: return view.getUint8(pos);
+      case 1: return view.getInt8(pos);
+      case 2: return view.getUint8(pos);
+      case 3: return view.getInt16(pos, true);
+      case 4: return view.getUint16(pos, true);
+      case 5: return view.getInt32(pos, true);
+      case 6: return view.getUint32(pos, true);
+      case 7: { // string
+        let s = "";
+        for (let i=0;i<size;i++) { const c = bytes[pos+i]; if(c===0) break; s+=String.fromCharCode(c); }
+        return s;
+      }
+      case 10: return view.getUint16(pos, true); // uint16
+      case 12: return view.getUint32(pos, true); // uint32
+      default: return null;
+    }
+  }
+
+  while (pos < dataEnd) {
+    if (pos >= bytes.length) break;
+    const recordHeader = bytes[pos++];
+    const isCompressed = (recordHeader & 0x80) !== 0;
+
+    if (isCompressed) {
+      // skip compressed timestamp records
+      const localNum = (recordHeader >> 5) & 0x03;
+      const def = localMsgDefs[localNum];
+      if (!def) continue;
+      let recSize = 4; // timestamp offset + fields
+      def.fields.forEach(f => recSize += f.size);
+      pos += recSize - 1;
+      continue;
+    }
+
+    const isDefinition = (recordHeader & 0x40) !== 0;
+    const localMsgNum = recordHeader & 0x0F;
+
+    if (isDefinition) {
+      pos++; // reserved
+      const arch = bytes[pos++]; // 0=little, 1=big
+      const globalMsgNum = arch === 0
+        ? view.getUint16(pos, true)
+        : view.getUint16(pos, false);
+      pos += 2;
+      const numFields = bytes[pos++];
+      const fields = [];
+      for (let i=0; i<numFields; i++) {
+        const fieldDef = bytes[pos++];
+        const size = bytes[pos++];
+        const baseType = bytes[pos++];
+        fields.push({ fieldDef, size, baseType });
+      }
+      // developer fields
+      if (recordHeader & 0x20) {
+        const numDevFields = bytes[pos++];
+        for (let i=0; i<numDevFields; i++) { pos += 3; }
+      }
+      localMsgDefs[localMsgNum] = { globalMsgNum, arch, fields };
+    } else {
+      // data record
+      const def = localMsgDefs[localMsgNum];
+      if (!def) { pos++; continue; }
+
+      const recStart = pos;
+      const record = {};
+      const le = def.arch === 0;
+
+      def.fields.forEach(f => {
+        let val = null;
+        try {
+          switch(f.baseType & 0x9F) {
+            case 0: case 2: val = view.getUint8(pos); break;
+            case 1: val = view.getInt8(pos); break;
+            case 3: val = view.getInt16(pos, le); break;
+            case 4: case 10: val = view.getUint16(pos, le); break;
+            case 5: val = view.getInt32(pos, le); break;
+            case 6: case 12: val = view.getUint32(pos, le); break;
+            case 7: {
+              let s = "";
+              for (let i=0;i<f.size;i++) { const c=bytes[pos+i]; if(c===0) break; s+=String.fromCharCode(c); }
+              val = s; break;
+            }
+            default: val = null;
+          }
+        } catch(e) { val = null; }
+        record[f.fieldDef] = val;
+        pos += f.size;
+      });
+
+      // Global msg 18 = session, 19 = lap
+      if (def.globalMsgNum === 18) {
+        // session fields: 7=total_elapsed_time(s*1000), 9=total_distance(m*100),
+        // 16=avg_speed(m/s*1000), 18=avg_heart_rate, 15=max_heart_rate
+        sessions.push({
+          elapsed: record[7] !== undefined ? record[7]/1000 : null,
+          distance: record[9] !== undefined ? record[9]/100 : null,
+          avgSpeed: record[16] !== undefined ? record[16]/1000 : null,
+          avgHR: record[18] || null,
+          maxHR: record[15] || null,
+        });
+      } else if (def.globalMsgNum === 19) {
+        // lap fields: 7=total_elapsed_time, 9=total_distance, 16=avg_speed, 18=avg_hr
+        laps.push({
+          elapsed: record[7] !== undefined ? record[7]/1000 : null,
+          distance: record[9] !== undefined ? record[9]/100 : null,
+          avgSpeed: record[16] !== undefined ? record[16]/1000 : null,
+          avgHR: record[18] || null,
+        });
+      }
+    }
+  }
+
+  if (sessions.length === 0) throw new Error("Nem találtam session adatot a FIT fájlban.");
+
+  const s = sessions[0];
+  const avgPaceSec = s.avgSpeed && s.avgSpeed > 0 ? 1000/s.avgSpeed : null;
+
+  return {
+    elapsed: s.elapsed,
+    distance: s.distance,
+    avgHR: s.avgHR,
+    maxHR: s.maxHR,
+    avgPaceSec,
+    laps: laps.filter(l => l.distance > 50), // filter out tiny laps
+  };
+}
+
+// ── File handling ─────────────────────────────────────────────────────────────
+let parsedData = null;
+
+async function handleFile(file) {
+  const err = document.getElementById("errorMsg");
+  const loading = document.getElementById("loadingMsg");
+  err.textContent = "";
+  loading.textContent = "Feldolgozás...";
+  document.getElementById("parsedPreview").style.display = "none";
+  document.getElementById("resultPanel").style.display = "none";
+
+  try {
+    let fitBuffer = null;
+
+    if (file.name.endsWith(".zip")) {
+      const zip = await JSZip.loadAsync(file);
+      const fitFiles = Object.keys(zip.files).filter(n => n.endsWith(".fit") || n.endsWith(".FIT"));
+      if (fitFiles.length === 0) throw new Error("Nem található .fit fájl a ZIP-ben.");
+      fitBuffer = await zip.files[fitFiles[0]].async("arraybuffer");
+    } else if (file.name.endsWith(".fit") || file.name.endsWith(".FIT")) {
+      fitBuffer = await file.arrayBuffer();
+    } else {
+      throw new Error("Csak .zip vagy .fit fájlt fogadok el.");
+    }
+
+    parsedData = parseFIT(fitBuffer);
+    loading.textContent = "";
+    showParsed();
+  } catch(e) {
+    loading.textContent = "";
+    err.textContent = "⚠ " + e.message;
+  }
+}
+
+function showParsed() {
+  const d = parsedData;
+  const grid = document.getElementById("dataGrid");
+  const distKm = d.distance ? (d.distance/1000).toFixed(2) : "–";
+  const timeStr = d.elapsed ? fmtTime(d.elapsed) : "–";
+  const pace = d.avgPaceSec ? fmtPace(d.avgPaceSec) : "–";
+  const hr = d.avgHR || "–";
+  const maxHR = d.maxHR || "–";
+  const lapsCount = d.laps.length;
+
+  grid.innerHTML = `
+    <div class="data-cell"><div class="data-cell-label">Távolság</div><div class="data-cell-val">${distKm} km</div></div>
+    <div class="data-cell"><div class="data-cell-label">Idő</div><div class="data-cell-val">${timeStr}</div></div>
+    <div class="data-cell"><div class="data-cell-label">Átlag tempó</div><div class="data-cell-val">${pace}</div></div>
+    <div class="data-cell"><div class="data-cell-label">Átlag pulzus</div><div class="data-cell-val">${hr} bpm</div></div>
+    <div class="data-cell"><div class="data-cell-label">Max pulzus</div><div class="data-cell-val">${maxHR} bpm</div></div>
+    <div class="data-cell"><div class="data-cell-label">Körök</div><div class="data-cell-val">${lapsCount} db</div></div>
+  `;
+  document.getElementById("parsedPreview").style.display = "block";
+}
+
+// ── Analysis ─────────────────────────────────────────────────────────────────
+document.getElementById("feelSlider").addEventListener("input", function() {
+  const labels = ["","Nagyon nehéz 😓","Nehéz 😤","Közepes 😐","Jól ment 🙂","Könnyű volt 😄"];
+  document.getElementById("feelText").textContent = labels[this.value];
+});
+
+document.getElementById("analyzeBtn").addEventListener("click", function() {
+  if (!parsedData) return;
+  const feel = parseInt(document.getElementById("feelSlider").value);
+  const d = parsedData;
+
+  if (!d.avgHR || !d.avgPaceSec) {
+    document.getElementById("errorMsg").textContent = "⚠ Hiányzó pulzus vagy tempó adat a FIT fájlból.";
+    return;
+  }
+
+  const zone = classifyZone(d.avgHR, d.avgPaceSec);
+  const adjZone = adjustByFeel(zone, feel);
+  const thu = THURSDAY[adjZone];
+  const sat = SATURDAY[adjZone];
+  const zoneInfo = ZONES[adjZone];
+  const feelLabels = ["","Nagyon nehéz 😓","Nehéz 😤","Közepes 😐","Jól ment 🙂","Könnyű volt 😄"];
+
+  // Zone badge
+  document.getElementById("zoneBadge").style.borderLeft = `3px solid ${zoneInfo.color}`;
+  document.getElementById("zoneBadge").style.border = `1px solid ${zoneInfo.color}33`;
+  document.getElementById("zoneBadge").style.borderLeft = `3px solid ${zoneInfo.color}`;
+  document.getElementById("zoneBadge").innerHTML = `
+    <div class="zone-circle" style="background:${zoneInfo.color}22;border:2px solid ${zoneInfo.color};color:${zoneInfo.color}">
+      ${adjZone}
+    </div>
+    <div>
+      <div class="zone-name" style="color:${zoneInfo.color}">${zoneInfo.label}</div>
+      <div class="zone-meta">${d.avgHR} bpm · ${fmtPace(d.avgPaceSec)} · ${feelLabels[feel]}</div>
+      ${zone !== adjZone ? `<div class="zone-adj">↳ szubjektív érzés alapján korrigálva (${zone} → ${adjZone})</div>` : ""}
+    </div>
+  `;
+
+  // Zone bar
+  const track = document.getElementById("zoneBarTrack");
+  track.innerHTML = ZONE_ORDER.map(z =>
+    `<div class="zone-bar-seg" style="background:${z===adjZone ? ZONES[z].color : ZONES[z].color+'33'}"></div>`
+  ).join("");
+
+  // Thursday card
+  document.getElementById("thursdayCard").innerHTML = `
+    <div class="workout-card-header">
+      <div class="workout-day">Csütörtök</div>
+      <div class="workout-tag" style="background:${thu.color}22;color:${thu.color};border:1px solid ${thu.color}44">${thu.label}</div>
+    </div>
+    <div class="workout-desc">${thu.desc}</div>
+    <div class="workout-detail">${thu.workout}</div>
+  `;
+
+  // Saturday card
+  document.getElementById("saturdayCard").innerHTML = `
+    <div class="workout-card-header">
+      <div class="workout-day">Szombat</div>
+    </div>
+    <div class="workout-desc">${sat.note}</div>
+    <div class="workout-detail">${sat.workout}</div>
+  `;
+
+  // Laps
+  const lapsToggle = document.getElementById("lapsToggle");
+  const lapsContainer = document.getElementById("lapsContainer");
+  if (parsedData.laps.length > 0) {
+    lapsToggle.style.display = "inline-block";
+    lapsContainer.innerHTML = `<table class="laps-table">
+      <thead><tr><th>#</th><th>Táv</th><th>Idő</th><th>Tempó</th><th>Avg HR</th></tr></thead>
+      <tbody>
+        ${parsedData.laps.map((l,i) => {
+          const pace = l.avgSpeed && l.avgSpeed > 0 ? fmtPace(1000/l.avgSpeed) : "–";
+          const dist = l.distance ? (l.distance).toFixed(0)+"m" : "–";
+          const time = l.elapsed ? fmtTime(l.elapsed) : "–";
+          const hr = l.avgHR || "–";
+          return `<tr><td style="color:var(--muted)">${i+1}</td><td>${dist}</td><td>${time}</td><td>${pace}</td><td>${hr}</td></tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+    let open = false;
+    lapsToggle.onclick = () => {
+      open = !open;
+      lapsToggle.textContent = (open ? "▼" : "▶") + " Résztávok " + (open ? "elrejtése" : "megjelenítése");
+      lapsContainer.style.display = open ? "block" : "none";
+    };
+  } else {
+    lapsToggle.style.display = "none";
+  }
+
+  document.getElementById("resultPanel").style.display = "block";
+  document.getElementById("resultPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+// ── Drag & drop + file input ──────────────────────────────────────────────────
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+
+fileInput.addEventListener("change", e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+</script>
+</body>
+</html>
